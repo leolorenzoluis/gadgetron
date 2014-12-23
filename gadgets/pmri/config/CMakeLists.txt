@@ -1,6 +1,7 @@
 if (ARMADILLO_FOUND)
   install (FILES 
     generic_gpusense_cg.xml 
+    generic_gpusense_repetition_cg.xml 
     generic_gpusense_cg_singleshot.xml 
     generic_gpusense_sb_singleshot.xml 
     generic_gpusense_nlcg_singleshot.xml
