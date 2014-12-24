@@ -386,7 +386,7 @@ namespace Gadgetron{
         // Make an estimate of the acceleration factor
         //
 	
-        long tmp_accel = readout - previous_readout_no_[idx];
+        long tmp_accel = 1;//readout - previous_readout_no_[idx];
 
         if( acceleration_factor_[idx] != tmp_accel )
           GADGET_DEBUG2("Detected an acceleration factor of %d\n", tmp_accel);
