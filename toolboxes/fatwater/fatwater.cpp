@@ -7,6 +7,7 @@
 #include "hoNDArray_reductions.h"
 #include "hoArmadillo.h"
 
+#include <math.h>
 #include <iostream>
 #include <boost/config.hpp>
 #include <boost/graph/push_relabel_max_flow.hpp>
@@ -33,11 +34,25 @@ typedef adjacency_list < vecS, vecS, directedS,
 			 property < edge_residual_capacity_t, EdgeWeightType,
 			 property < edge_reverse_t, Traits::edge_descriptor > > > > Graph;
 
+/*
 Traits::edge_descriptor AddEdge(Traits::vertex_descriptor &v1,
 				Traits::vertex_descriptor &v2,
 				property_map < Graph, edge_reverse_t >::type &rev,
 				const double capacity,
 				Graph &g);
+*/
+
+Traits::edge_descriptor AddEdge(Traits::vertex_descriptor &v1, Traits::vertex_descriptor &v2, property_map < Graph, edge_reverse_t >::type &rev, const double capacity, Graph &g)
+{
+  Traits::edge_descriptor e1 = add_edge(v1, v2, g).first;
+  Traits::edge_descriptor e2 = add_edge(v2, v1, g).first;
+  put(edge_capacity, g, e1, capacity);
+  put(edge_capacity, g, e2, capacity);
+ 
+  rev[e1] = e2;
+  rev[e2] = e1;
+}
+
 
 namespace Gadgetron {
   hoNDArray< std::complex<float> > fatwater_separation(hoNDArray< std::complex<float> >& data, FatWaterParameters p, FatWaterAlgorithm a)
@@ -75,6 +90,7 @@ namespace Gadgetron {
     uint16_t num_r2star = 1;
     std::pair<float,float> range_fm = std::make_pair(-80.0,80.0);
     uint16_t num_fm = 101;
+    uint16_t size_clique = 1;
     uint16_t num_iterations = 40;
     uint16_t subsample = 1;
     float lmap_power = 2.0;
@@ -241,49 +257,86 @@ namespace Gadgetron {
     }
   
   
+ 
+
+    // Initialize field map (indexed on the quantized fm values) to be in the middle of the field map range (ie: all zeroes if symmetric range)
+    hoNDArray< uint16_t > cur_ind(X,Y,Z); // field map index
+    cur_ind.fill((int)(num_fm/2));
+    // If we want to consider only one field map value, no need for any fancy stuff
+    if( num_fm>1 ) { // Otherwise, do graph cut iterations
+
+
+      float delta_fm = fms[2]-fms[1];
+      hoNDArray< float > lmap(X,Y,Z); // regularization parameter map
+      int fm_min_index;
+      int fm_min;
+      // Set regularization parameter map for spatially-varying regularization
+      for( int kx=0;kx<X;kx++ ) {
+	for( int ky=0;ky<Y;ky++ ) {
+	  for( int kz=0;kz<Z;kz++ ) {
+	  
+	    // Find minimum residual at this (kx,ky,kz) pixel
+	    fm_min = residual(1,kx,ky,kz);
+	    fm_min_index = 1;
+	    for( int kfm=1;kfm<num_fm-1;kfm++ ) {
+	      if( residual(kfm,kx,ky,kz) < fm_min ) {
+		fm_min = residual(kfm,kx,ky,kz);
+		fm_min_index = kfm;
+	      }
+	    }
+	    lmap(kx,ky,kz) = abs((residual(fm_min_index+1,kx,ky,kz) + residual(fm_min_index+1,kx,ky,kz) - 2*residual(fm_min_index+1,kx,ky,kz))/(delta_fm*delta_fm));
+	    lmap(kx,ky,kz) = pow(lmap(kx,ky,kz),lmap_power/2.0);
+	  
+	  }
+	}
+      }
+
+      float lmap_mean = Gadgetron::mean(&lmap);
+      // Set regularization parameter map for spatially-varying regularization
+      for( int kx=0;kx<X;kx++ ) {
+	for( int ky=0;ky<Y;ky++ ) {
+	  for( int kz=0;kz<Z;kz++ ) {
+	    lmap(kx,ky,kz) += lmap_mean*lambda_extra;
+	  }
+	}
+      }    
     
-    //arma::Mat< std::complex<float> > arma_phiMatrix = as_arma_matrix( phiMatrix );
-  
-    /*
-    //Do graph cut iterations
-    using namespace boost;
-  
-    // create a typedef for the Graph type
-    typedef adjacency_list<vecS, vecS, bidirectionalS> Graph;
-  
-    // Make convenient labels for the vertices
-    enum { A, B, C, D, E };
-    const int num_vertices = 5;
-    const char* name = "ABCDE";
-  
-    // writing out the edges in the graph
-    typedef std::pair<int, int> Edge;
-    Edge edge_array[] =
-      { Edge(A,B), Edge(A,D), Edge(C,A), Edge(D,C),
-	Edge(C,E), Edge(B,D), Edge(D,E) };
-    const int num_edges = sizeof(edge_array)/sizeof(edge_array[0]);
-  
-    // declare a graph object
-    Graph g(edge_array, edge_array + sizeof(edge_array) / sizeof(Edge), num_vertices);
-  
-    // get the property map for vertex indices
-    typedef property_map<Graph, vertex_index_t>::type IndexMap;
-    IndexMap index = get(vertex_index, g);
+      // Graphcut: big jumps
+      
+      
+      // Find the next candidate index at each voxel (ie: next local minimum)
+      hoNDArray< uint16_t > next_ind(X,Y,Z); // field map index
+      uint16_t next_ind_voxel;
+      bool found_local_min;
+      for( int kx=0;kx<X;kx++ ) {
+	for( int ky=0;ky<Y;ky++ ) {
+	  for( int kz=0;kz<Z;kz++ ) {
+	    
+	    // Find next local minimizer of residual at this (kx,ky,kz) pixel
+	    fm_min = residual(1,kx,ky,kz);
+	    next_ind_voxel = cur_ind(kx,ky,kz) + 1;
+	    found_local_min = false;
+	    while (next_ind_voxel < num_fm-1 && !found_local_min) {
+	      if( residual(next_ind_voxel,kx,ky,kz) < residual(next_ind_voxel-1,kx,ky,kz) &&  residual(next_ind_voxel,kx,ky,kz) < residual(next_ind_voxel+1,kx,ky,kz) ) {
+		found_local_min = true;
+	      } else { 
+		next_ind_voxel++;
+	      }
+	    }
 
-    std::cout << "vertices(g) = ";
-    typedef graph_traits<Graph>::vertex_iterator vertex_iter;
-    std::pair<vertex_iter, vertex_iter> vp;
-    for (vp = vertices(g); vp.first != vp.second; ++vp.first)
-      std::cout << index[*vp.first] <<  " ";
-    std::cout << std::endl;
+	    if( !found_local_min )
+	      next_ind_voxel = num_fm;
 
-    std::cout << "edges(g) = ";
-    graph_traits<Graph>::edge_iterator ei, ei_end;
-    for (tie(ei, ei_end) = edges(g); ei != ei_end; ++ei)
-      std::cout << "(" << index[source(*ei, g)] 
-		<< "," << index[target(*ei, g)] << ") ";
-    std::cout << std::endl;
-    */
+	    next_ind(kx,ky,kz) = next_ind_voxel;
+	    
+	  }
+	}
+      }
+	    
+      // Form the graph
+      uint32_t num_nodes = X*Y*Z + 2; // One node per voxel, plus source and sink
+      uint32_t num_edges = num_nodes*(2 + (size_clique+1)^2); // Number of edges, including data and regularization terms
+
 
     // Add some graph stuff
      
@@ -303,36 +356,39 @@ namespace Gadgetron {
 					property < edge_residual_capacity_t, EdgeWeightType,
 						   property < edge_reverse_t, Traits::edge_descriptor > > > > Graph;
  
-    Traits::edge_descriptor AddEdge(Traits::vertex_descriptor &v1,
-				    Traits::vertex_descriptor &v2,
-				    property_map < Graph, edge_reverse_t >::type &rev,
-				    const double capacity,
-				    Graph &g);
-
     Graph g; //a graph with 0 vertices
  
     property_map < Graph, edge_reverse_t >::type rev = get(edge_reverse, g);
  
     //add a source and sink node, and store them in s and t, respectively
-    Traits::vertex_descriptor v0 = add_vertex(g);
-    Traits::vertex_descriptor v1 = add_vertex(g);
-    Traits::vertex_descriptor v2 = add_vertex(g);
-    Traits::vertex_descriptor v3 = add_vertex(g);
+    Traits::vertex_descriptor s = add_vertex(g);
     
-    Traits::edge_descriptor e1 = add_edge(v0, v1, g).first;
-    Traits::edge_descriptor e2 = add_edge(v1, v0, g).first;
-    put(edge_capacity, g, e1, 6);
-    put(edge_capacity, g, e2, 6);
-    rev[e1] = e2;
-    rev[e2] = e1;
+    std::vector<Traits::vertex_descriptor> v(10);
+    for(int kv=0;kv<v.size();kv++) {
+      v[kv] = add_vertex(g);
+    }
+    Traits::vertex_descriptor t = add_vertex(g);
+    
+
+
+
+    AddEdge(s, v[0], rev, 6, g);
+    AddEdge(v[0], v[3], rev, 6, g);
+    AddEdge(v[3], t, rev, 6, g);
 
     /*
-    AddEdge(v0, v1, rev, 6, g);
-    AddEdge(v0, v2, rev, 5, g);
-    AddEdge(v1, v3, rev, 8, g);
-    AddEdge(v2, v3, rev, 7, g);
- 
-    EdgeWeightType flow = push_relabel_max_flow(g, v0, v3); // a list of sources will be returned in s, and a list of sinks will be returned in t
+    std::vector<Traits::edge_descriptor> e(20);
+    e[0] = add_edge(s, v[0], g).first;
+    e[1] = add_edge(v[0], v[4], g).first;
+    e[2] = add_edge(v[4], t, g).first;
+    put(edge_capacity, g, e[0], 5.2);
+    put(edge_capacity, g, e[1], 3.4);
+    put(edge_capacity, g, e[2], 1.1);
+    //    put(edge_capacity, g, e[1], get(edge_capacity, g, e[1]) + 0.4);
+    GDEBUG("Edge capacity 2 = %f \n", get(edge_capacity, g, e[2]));
+    */
+
+    EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
 
     std::cout << "Max flow is: " << flow << std::endl;
  
@@ -340,8 +396,8 @@ namespace Gadgetron {
       capacity = get(edge_capacity, g);
     property_map<Graph, edge_residual_capacity_t>::type
       residual_capacity = get(edge_residual_capacity, g);
- 
- 
+    
+    /* 
     graph_traits<Graph>::vertex_iterator u_iter, u_end;
     graph_traits<Graph>::out_edge_iterator ei, e_end;
     for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter)
@@ -349,8 +405,27 @@ namespace Gadgetron {
 	if (capacity[*ei] > 0)
 	  std::cout << "Source: " << *u_iter << " destination: " << target(*ei, g) << " capacity: "  << capacity[*ei] << "residual cap: " << residual_capacity[*ei] << " used capacity: "
 		    << (capacity[*ei] - residual_capacity[*ei]) << std::endl;
- 
     */
+
+
+
+
+
+
+
+
+
+
+    
+    
+    // Graphcut: small jumps
+    
+  } // End else (all the graph cut iteration portion)
+  
+
+
+
+
 
 
 
