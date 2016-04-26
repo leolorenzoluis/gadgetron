@@ -14,6 +14,7 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/boykov_kolmogorov_max_flow.hpp>
 #include <boost/graph/edmonds_karp_max_flow.hpp>
+#include <boost/timer/timer.hpp>
 
 #define GAMMABAR 42.576 // MHz/T
 #define PI 3.141592
@@ -57,6 +58,13 @@ namespace Gadgetron {
   hoNDArray< std::complex<float> > fatwater_separation(hoNDArray< std::complex<float> >& data, FatWaterParameters p, FatWaterAlgorithm a)
   {
     
+
+
+    // Start the timer
+    boost::timer::cpu_timer mytimer;
+    //    mytimer.start();
+
+
     //Get some data parameters
     //7D, fixed order [X, Y, Z, CHA, N, S, LOC]
     uint16_t X = data.get_size(0);
@@ -333,7 +341,7 @@ namespace Gadgetron {
       }
 	    
       // Form the graph
-      uint32_t num_nodes = X*Y*Z + 2; // One node per voxel, plus source and sink
+      uint32_t num_nodes = X*Y*Z; // One node per voxel, num_nodes excludes source and sink
       uint32_t num_edges = num_nodes*(2 + (size_clique+1)^2); // Number of edges, including data and regularization terms
 
 
@@ -362,14 +370,12 @@ namespace Gadgetron {
     //add a source and sink node, and store them in s and t, respectively
     Traits::vertex_descriptor s = add_vertex(g);
     
-    std::vector<Traits::vertex_descriptor> v(10);
+    std::vector<Traits::vertex_descriptor> v(num_nodes);
     for(int kv=0;kv<v.size();kv++) {
       v[kv] = add_vertex(g);
     }
     Traits::vertex_descriptor t = add_vertex(g);
     
-
-
 
     AddEdge(s, v[0], rev, 6, g);
     AddEdge(s, v[1], rev, 100, g);
@@ -409,7 +415,7 @@ namespace Gadgetron {
 
     graph_traits<Graph>::vertex_iterator u_iter, u_end;
     for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter) {
-      std::cout << "     Vertex: " << *u_iter << ", Color: " << colormap[*u_iter] << std::endl; 
+      //      std::cout << "     Vertex: " << *u_iter << ", Color: " << colormap[*u_iter] << std::endl; 
     }
 
     /*
@@ -479,7 +485,7 @@ namespace Gadgetron {
       }
     }
   
-  
+    std::cout << mytimer.format() << '\n';  
   
     //Clean up as needed
   
