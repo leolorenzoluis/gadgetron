@@ -13,7 +13,6 @@
 #include <boost/graph/push_relabel_max_flow.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/boykov_kolmogorov_max_flow.hpp>
-#include <boost/graph/push_relabel_max_flow.hpp>
 #include <boost/graph/edmonds_karp_max_flow.hpp>
 
 #define GAMMABAR 42.576 // MHz/T
@@ -47,7 +46,7 @@ Traits::edge_descriptor AddEdge(Traits::vertex_descriptor &v1, Traits::vertex_de
   Traits::edge_descriptor e1 = add_edge(v1, v2, g).first;
   Traits::edge_descriptor e2 = add_edge(v2, v1, g).first;
   put(edge_capacity, g, e1, capacity);
-  put(edge_capacity, g, e2, capacity);
+  put(edge_capacity, g, e2, 0*capacity);
  
   rev[e1] = e2;
   rev[e2] = e1;
@@ -373,8 +372,16 @@ namespace Gadgetron {
 
 
     AddEdge(s, v[0], rev, 6, g);
-    AddEdge(v[0], v[3], rev, 6, g);
-    AddEdge(v[3], t, rev, 6, g);
+    AddEdge(s, v[1], rev, 100, g);
+    AddEdge(s, v[2], rev, 100, g);
+    AddEdge(s, v[4], rev, 100, g);
+    AddEdge(v[5], t, rev, 100, g);
+    AddEdge(v[6], t, rev, 100, g);
+    AddEdge(v[7], t, rev, 100, g);
+    AddEdge(v[8], t, rev, 100, g);
+    AddEdge(v[9], t, rev, 100, g);
+    AddEdge(v[0], v[3], rev, 8, g);
+    AddEdge(v[3], t, rev, 9, g);
 
     /*
     std::vector<Traits::edge_descriptor> e(20);
@@ -388,35 +395,35 @@ namespace Gadgetron {
     GDEBUG("Edge capacity 2 = %f \n", get(edge_capacity, g, e[2]));
     */
 
-    EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+    //    EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+    EdgeWeightType flow = boykov_kolmogorov_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
 
     std::cout << "Max flow is: " << flow << std::endl;
- 
+
     property_map<Graph, edge_capacity_t>::type
       capacity = get(edge_capacity, g);
     property_map<Graph, edge_residual_capacity_t>::type
       residual_capacity = get(edge_residual_capacity, g);
-    
-    /* 
+    property_map<Graph, vertex_color_t>::type
+      colormap = get(vertex_color, g);
+
+    graph_traits<Graph>::vertex_iterator u_iter, u_end;
+    for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter) {
+      std::cout << "     Vertex: " << *u_iter << ", Color: " << colormap[*u_iter] << std::endl; 
+    }
+
+    /*
     graph_traits<Graph>::vertex_iterator u_iter, u_end;
     graph_traits<Graph>::out_edge_iterator ei, e_end;
-    for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter)
-      for (tie(ei, e_end) = out_edges(*u_iter, g); ei != e_end; ++ei)
+    for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter) {
+      for (tie(ei, e_end) = out_edges(*u_iter, g); ei != e_end; ++ei) {
 	if (capacity[*ei] > 0)
-	  std::cout << "Source: " << *u_iter << " destination: " << target(*ei, g) << " capacity: "  << capacity[*ei] << "residual cap: " << residual_capacity[*ei] << " used capacity: "
-		    << (capacity[*ei] - residual_capacity[*ei]) << std::endl;
+	  std::cout << "Source: " << *u_iter << " destination: " << target(*ei, g) << " capacity: "  << capacity[*ei] << ",  residual cap: " << residual_capacity[*ei] << " used capacity: "
+		    << (capacity[*ei] - residual_capacity[*ei]) << std::endl;      
+      }
+
+    }
     */
-
-
-
-
-
-
-
-
-
-
-    
     
     // Graphcut: small jumps
     
