@@ -216,53 +216,56 @@ namespace Gadgetron {
     // N should be the number of contrasts (eg: for PSIR)
     hoMatrix< std::complex<float> > tempResVector(S,N);
     hoMatrix< std::complex<float> > tempSignal(S,N);
-    hoNDArray<float> residual(num_fm,X,Y);
-    hoNDArray<uint16_t> r2starIndex(X,Y,num_fm);
-    hoNDArray<uint16_t> fmIndex(X,Y);
+    hoNDArray<float> residual(num_fm,X,Y,Z);
+    hoNDArray<uint16_t> r2starIndex(num_fm,X,Y,Z);
+    hoNDArray<uint16_t> fmIndex(X,Y,Z);
     float curResidual, minResidual, minResidual2;
-    for( int k1=0;k1<X;k1++) {
-      for( int k2=0;k2<Y;k2++) {
-	// Get current signal
-	for( int k4=0;k4<N;k4++) {
-	  for( int k5=0;k5<S;k5++) {
-	    tempSignal(k5,k4) = data(k1,k2,0,0,k4,k5,0);
+    for( int kx=0;kx<X;kx++) {
+      for( int ky=0;ky<Y;ky++) {
+	for( int kz=0;kz<Z;kz++) {
+	  // Get current signal
+	  for( int kn=0;kn<N;kn++) {
+	    for( int ks=0;ks<S;ks++) {
+	      tempSignal(ks,kn) = data(kx,ky,kz,0,kn,ks,0);
+	    }
 	  }
-	}
-      
-	minResidual2 = 1.0 + nrm2(&tempSignal);
-      
-	for(int k3=0;k3<num_fm;k3++) {
-	
-	  minResidual = 1.0 + nrm2(&tempSignal);
-	
-	  for(int k4=0;k4<num_r2star;k4++) {
-	    // Get current projector matrix
-	    for( int k5=0;k5<nte;k5++) {
-	      for( int k6=0;k6<nte;k6++) {
-		P(k5,k6) = Ps(k5,k6,k3,k4);
+	  
+	  minResidual2 = 1.0 + nrm2(&tempSignal);
+	  
+	  for(int kfm=0;kfm<num_fm;kfm++) {
+	    
+	    minResidual = 1.0 + nrm2(&tempSignal);
+	    
+	    for(int kr=0;kr<num_r2star;kr++) {
+	      // Get current projector matrix
+	      for( int kt1=0;kt1<nte;kt1++) {
+		for( int kt2=0;kt2<nte;kt2++) {
+		  P(kt1,kt1) = Ps(kt2,kt2,kfm,kr);
+		}
+	      }
+	      
+	      // Apply projector
+	      gemm( tempResVector, P, false, tempSignal, false );
+	      
+	      curResidual = nrm2(&tempResVector);
+	      
+	      if (curResidual < minResidual) {
+		minResidual = curResidual;
+		r2starIndex(kfm,kx,ky,kz) = kr;
 	      }
 	    }
-	  
-	    // Apply projector
-	    gemm( tempResVector, P, false, tempSignal, false );
-	  
-	    curResidual = nrm2(&tempResVector);
-	  
-	    if (curResidual < minResidual) {
-	      minResidual = curResidual;
-	      r2starIndex(k1,k2,k3) = k4;
+	    residual(kfm,kx,ky,kz) = minResidual;
+	    
+	    if (minResidual < minResidual2) {
+	      minResidual2 = minResidual;
+	      fmIndex(kx,ky,kz) = kfm;
 	    }
-	  }
-	  residual(k3,k1,k2) = minResidual;
-	
-	  if (minResidual < minResidual2) {
-	    minResidual2 = minResidual;
-	    fmIndex(k1,k2) = k3;
 	  }
 	}
       }
     }
-  
+
+
   
  
 
@@ -308,6 +311,11 @@ namespace Gadgetron {
 	}
       }    
     
+      std::cout << " lmap = " << lmap(100,100,0) << std::endl;
+
+
+
+
       // Graphcut: big jumps
       
       
@@ -369,10 +377,13 @@ namespace Gadgetron {
  
     //add a source and sink node, and store them in s and t, respectively
     Traits::vertex_descriptor s = add_vertex(g);
-    
-    std::vector<Traits::vertex_descriptor> v(num_nodes);
-    for(int kv=0;kv<v.size();kv++) {
-      v[kv] = add_vertex(g);
+    hoNDArray<Traits::vertex_descriptor> v(X,Y,Z);
+    for(int kx=0;kx<X;kx++) {
+      for(int ky=0;ky<Y;ky++) {
+	for(int kz=0;kz<Z;kz++) {
+	  v(kx,ky,kz) = add_vertex(g);
+	}
+      }
     }
     Traits::vertex_descriptor t = add_vertex(g);
 
@@ -390,14 +401,21 @@ namespace Gadgetron {
 		
 		dist = pow(dx*dx+dy*dy+dz*dz,0.5);
 
-		if(kx+dx>=0 && kx+dx<X && ky+dy>=0 && ky+dy<Y && ky+dy>=0 && ky+dy<Y && dist>0) {
+		if(kx+dx>=0 && kx+dx<X && ky+dy>=0 && ky+dy<Y && kz+dz>=0 && kz+dz<Z && dist>0) {
 
 		  curlmap = std::min(lmap(kx,ky,kz),lmap(kx+dx,ky+dy,kz+dz));
 
-		a = curlmap/dist*pow(cur_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
-		b = curlmap/dist*pow(cur_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
-		c = curlmap/dist*pow(next_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
-		d = curlmap/dist*pow(next_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
+		  a = curlmap/dist*pow(cur_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
+		  b = curlmap/dist*pow(cur_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
+		  c = curlmap/dist*pow(next_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
+		  d = curlmap/dist*pow(next_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
+			  
+		  AddEdge(v(kx,ky,kz), v(kx+dx,ky+dy,kz+dz), rev, b+c-a-d, g);
+		  AddEdge(s, v(kx,ky,kz), rev, std::max(float(0.0),c-a) + std::max(float(0.0),residual(next_ind(kx,ky,kz),kx,ky,kz)-residual(cur_ind(kx,ky,kz),kx,ky,kz)), g);
+		  AddEdge(v(kx,ky,kz), t, rev, std::max(float(0.0),a-c) + std::max(float(0.0),residual(cur_ind(kx,ky,kz),kx,ky,kz)-residual(next_ind(kx,ky,kz),kx,ky,kz)), g);
+		  AddEdge(s, v(kx+dx,ky+dy,kz+dz), rev, std::max(float(0.0),d-c), g);
+		  AddEdge(v(kx+dx,ky+dy,kz+dz), t, rev, std::max(float(0.0),c-d), g);
+		  
 
 		}
 
@@ -410,34 +428,7 @@ namespace Gadgetron {
     }
 
 
-
-
     
-
-    AddEdge(s, v[0], rev, 6, g);
-    AddEdge(s, v[1], rev, 100, g);
-    AddEdge(s, v[2], rev, 100, g);
-    AddEdge(s, v[4], rev, 100, g);
-    AddEdge(v[5], t, rev, 100, g);
-    AddEdge(v[6], t, rev, 100, g);
-    AddEdge(v[7], t, rev, 100, g);
-    AddEdge(v[8], t, rev, 100, g);
-    AddEdge(v[9], t, rev, 100, g);
-    AddEdge(v[0], v[3], rev, 8, g);
-    AddEdge(v[3], t, rev, 9, g);
-
-    /*
-    std::vector<Traits::edge_descriptor> e(20);
-    e[0] = add_edge(s, v[0], g).first;
-    e[1] = add_edge(v[0], v[4], g).first;
-    e[2] = add_edge(v[4], t, g).first;
-    put(edge_capacity, g, e[0], 5.2);
-    put(edge_capacity, g, e[1], 3.4);
-    put(edge_capacity, g, e[2], 1.1);
-    //    put(edge_capacity, g, e[1], get(edge_capacity, g, e[1]) + 0.4);
-    GDEBUG("Edge capacity 2 = %f \n", get(edge_capacity, g, e[2]));
-    */
-
     //    EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
     EdgeWeightType flow = boykov_kolmogorov_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
 
@@ -454,20 +445,10 @@ namespace Gadgetron {
     for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter) {
       //      std::cout << "     Vertex: " << *u_iter << ", Color: " << colormap[*u_iter] << std::endl; 
     }
-
-    /*
-    graph_traits<Graph>::vertex_iterator u_iter, u_end;
-    graph_traits<Graph>::out_edge_iterator ei, e_end;
-    for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter) {
-      for (tie(ei, e_end) = out_edges(*u_iter, g); ei != e_end; ++ei) {
-	if (capacity[*ei] > 0)
-	  std::cout << "Source: " << *u_iter << " destination: " << target(*ei, g) << " capacity: "  << capacity[*ei] << ",  residual cap: " << residual_capacity[*ei] << " used capacity: "
-		    << (capacity[*ei] - residual_capacity[*ei]) << std::endl;      
-      }
-
-    }
-    */
     
+
+
+
     // Graphcut: small jumps
     
   } // End else (all the graph cut iteration portion)
