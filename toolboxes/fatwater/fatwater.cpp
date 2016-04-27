@@ -294,7 +294,7 @@ namespace Gadgetron {
 		fm_min_index = kfm;
 	      }
 	    }
-	    lmap(kx,ky,kz) = abs((residual(fm_min_index+1,kx,ky,kz) + residual(fm_min_index+1,kx,ky,kz) - 2*residual(fm_min_index+1,kx,ky,kz))/(delta_fm*delta_fm));
+	    lmap(kx,ky,kz) = abs((residual(fm_min_index+1,kx,ky,kz) + residual(fm_min_index-1,kx,ky,kz) - 2*residual(fm_min_index,kx,ky,kz))/(delta_fm*delta_fm));
 	    lmap(kx,ky,kz) = pow(lmap(kx,ky,kz),lmap_power/2.0);
 	  
 	  }
@@ -395,6 +395,12 @@ namespace Gadgetron {
       for(int ky=0;ky<Y;ky++) {
 	for(int kz=0;kz<Z;kz++) {
 	  
+
+	  AddEdge(s, v(kx,ky,kz), rev, 0.1, g);
+	  AddEdge(v(kx,ky,kz), t, rev, 0.2, g);
+
+
+
 	  for(int dx=-size_clique;dx<=size_clique;dx++) {
 	    for(int dy=-size_clique;dy<=size_clique;dy++) {
 	      for(int dz=-size_clique;dz<=size_clique;dz++) {
@@ -409,13 +415,21 @@ namespace Gadgetron {
 		  b = curlmap/dist*pow(cur_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
 		  c = curlmap/dist*pow(next_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
 		  d = curlmap/dist*pow(next_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
-			  
-		  AddEdge(v(kx,ky,kz), v(kx+dx,ky+dy,kz+dz), rev, b+c-a-d, g);
-		  AddEdge(s, v(kx,ky,kz), rev, std::max(float(0.0),c-a) + std::max(float(0.0),residual(next_ind(kx,ky,kz),kx,ky,kz)-residual(cur_ind(kx,ky,kz),kx,ky,kz)), g);
-		  AddEdge(v(kx,ky,kz), t, rev, std::max(float(0.0),a-c) + std::max(float(0.0),residual(cur_ind(kx,ky,kz),kx,ky,kz)-residual(next_ind(kx,ky,kz),kx,ky,kz)), g);
-		  AddEdge(s, v(kx+dx,ky+dy,kz+dz), rev, std::max(float(0.0),d-c), g);
-		  AddEdge(v(kx+dx,ky+dy,kz+dz), t, rev, std::max(float(0.0),c-d), g);
 		  
+		  //		  AddEdge(v(kx,ky,kz), v(kx+dx,ky+dy,kz+dz), rev, b+c-a-d, g);
+		  //AddEdge(s, v(kx,ky,kz), rev, std::max(float(0.0),c-a) + std::max(float(0.0),residual(next_ind(kx,ky,kz),kx,ky,kz)-residual(cur_ind(kx,ky,kz),kx,ky,kz)), g);
+		  //AddEdge(v(kx,ky,kz), t, rev, std::max(float(0.0),a-c) + std::max(float(0.0),residual(cur_ind(kx,ky,kz),kx,ky,kz)-residual(next_ind(kx,ky,kz),kx,ky,kz)), g);
+		  //AddEdge(s, v(kx+dx,ky+dy,kz+dz), rev, std::max(float(0.0),d-c), g);
+		  //AddEdge(v(kx+dx,ky+dy,kz+dz), t, rev, std::max(float(0.0),c-d), g);
+
+
+
+
+
+
+		  if( kx==100 && ky==100) {
+		    std::cout << " One voxel, a = " << a << ", b = " << b << ", c = " << c << ", d = " << d << ", res1 = " << residual(cur_ind(kx,ky,kz),kx,ky,kz) << ", res2 = " << residual(next_ind(kx,ky,kz),kx,ky,kz) << ", ind1 = " << cur_ind(kx,ky,kz) <<  ", ind2 = " << next_ind(kx,ky,kz) << std::endl;
+		  }
 
 		}
 
@@ -429,8 +443,8 @@ namespace Gadgetron {
 
 
     
-    //    EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
-    EdgeWeightType flow = boykov_kolmogorov_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+    EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+    //EdgeWeightType flow = boykov_kolmogorov_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
 
     std::cout << "Max flow is: " << flow << std::endl;
 
