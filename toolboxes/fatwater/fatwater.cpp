@@ -375,6 +375,43 @@ namespace Gadgetron {
       v[kv] = add_vertex(g);
     }
     Traits::vertex_descriptor t = add_vertex(g);
+
+
+    float dist;
+    float a,b,c,d;
+    float curlmap;
+    for(int kx=0;kx<X;kx++) {
+      for(int ky=0;ky<Y;ky++) {
+	for(int kz=0;kz<Z;kz++) {
+	  
+	  for(int dx=-size_clique;dx<=size_clique;dx++) {
+	    for(int dy=-size_clique;dy<=size_clique;dy++) {
+	      for(int dz=-size_clique;dz<=size_clique;dz++) {
+		
+		dist = pow(dx*dx+dy*dy+dz*dz,0.5);
+
+		if(kx+dx>=0 && kx+dx<X && ky+dy>=0 && ky+dy<Y && ky+dy>=0 && ky+dy<Y && dist>0) {
+
+		  curlmap = std::min(lmap(kx,ky,kz),lmap(kx+dx,ky+dy,kz+dz));
+
+		a = curlmap/dist*pow(cur_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
+		b = curlmap/dist*pow(cur_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
+		c = curlmap/dist*pow(next_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
+		d = curlmap/dist*pow(next_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
+
+		}
+
+	      }
+	    }
+	  }
+
+	}
+      }
+    }
+
+
+
+
     
 
     AddEdge(s, v[0], rev, 6, g);
