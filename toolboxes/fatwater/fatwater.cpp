@@ -47,7 +47,7 @@ Traits::edge_descriptor AddEdge(Traits::vertex_descriptor &v1, Traits::vertex_de
   Traits::edge_descriptor e1 = add_edge(v1, v2, g).first;
   Traits::edge_descriptor e2 = add_edge(v2, v1, g).first;
   put(edge_capacity, g, e1, capacity);
-  put(edge_capacity, g, e2, 0*capacity);
+  put(edge_capacity, g, e2, capacity);
  
   rev[e1] = e2;
   rev[e2] = e1;
@@ -95,14 +95,14 @@ namespace Gadgetron {
     // These will have to be specified in the XML file eventually
     std::pair<float,float> range_r2star = std::make_pair(0.0,0.0);
     uint16_t num_r2star = 1;
-    std::pair<float,float> range_fm = std::make_pair(-80.0,80.0);
-    uint16_t num_fm = 101;
+    std::pair<float,float> range_fm = std::make_pair(-150.0,150.0);
+    uint16_t num_fm = 201;
     uint16_t size_clique = 1;
-    uint16_t num_iterations = 40;
+    uint16_t num_iterations = 60;
     uint16_t subsample = 1;
     float lmap_power = 2.0;
-    float lambda = 0.02;
-    float lambda_extra = 0.02;
+    float lambda = 0.001;
+    float lambda_extra = 0.001;
     
     //Check that we have reasonable data for fat-water separation
     
@@ -230,24 +230,24 @@ namespace Gadgetron {
 	    }
 	  }
 	  
-	  minResidual2 = 1.0 + nrm2(&tempSignal);
+	  minResidual2 = 1.0 + pow(nrm2(&tempSignal),2.0);
 	  
 	  for(int kfm=0;kfm<num_fm;kfm++) {
 	    
-	    minResidual = 1.0 + nrm2(&tempSignal);
+	    minResidual = 1.0 + pow(nrm2(&tempSignal),2.0);
 	    
 	    for(int kr=0;kr<num_r2star;kr++) {
 	      // Get current projector matrix
 	      for( int kt1=0;kt1<nte;kt1++) {
 		for( int kt2=0;kt2<nte;kt2++) {
-		  P(kt1,kt1) = Ps(kt2,kt2,kfm,kr);
+		  P(kt1,kt2) = Ps(kt1,kt2,kfm,kr);
 		}
 	      }
 	      
 	      // Apply projector
 	      gemm( tempResVector, P, false, tempSignal, false );
 	      
-	      curResidual = nrm2(&tempResVector);
+	      curResidual = pow(nrm2(&tempResVector),2);
 	      
 	      if (curResidual < minResidual) {
 		minResidual = curResidual;
@@ -264,6 +264,20 @@ namespace Gadgetron {
 	}
       }
     }
+
+    
+    float residual_max = Gadgetron::max(&residual);
+    float BIG_NUMBER = 10000;
+    for(int kfm=0;kfm<num_fm;kfm++) {
+      for( int kx=0;kx<X;kx++ ) {
+	for( int ky=0;ky<Y;ky++ ) {
+	  for( int kz=0;kz<Z;kz++ ) {
+	    residual(kfm,kx,ky,kz) = (BIG_NUMBER/residual_max)*residual(kfm,kx,ky,kz);
+	  }
+	}
+      }
+    }
+    
 
 
   
@@ -295,11 +309,12 @@ namespace Gadgetron {
 	      }
 	    }
 	    lmap(kx,ky,kz) = abs((residual(fm_min_index+1,kx,ky,kz) + residual(fm_min_index-1,kx,ky,kz) - 2*residual(fm_min_index,kx,ky,kz))/(delta_fm*delta_fm));
-	    lmap(kx,ky,kz) = pow(lmap(kx,ky,kz),lmap_power/2.0);
+	    lmap(kx,ky,kz) = lambda*pow(lmap(kx,ky,kz),lmap_power/2.0);
 	  
 	  }
 	}
       }
+
 
       float lmap_mean = Gadgetron::mean(&lmap);
       // Set regularization parameter map for spatially-varying regularization
@@ -310,218 +325,257 @@ namespace Gadgetron {
 	  }
 	}
       }    
-    
-      std::cout << " lmap = " << lmap(100,100,0) << std::endl;
 
 
-
-
-      // Graphcut: big jumps
-      
-      
-      // Find the next candidate index at each voxel (ie: next local minimum)
-      hoNDArray< uint16_t > next_ind(X,Y,Z); // field map index
-      uint16_t next_ind_voxel;
-      bool found_local_min;
-      for( int kx=0;kx<X;kx++ ) {
-	for( int ky=0;ky<Y;ky++ ) {
-	  for( int kz=0;kz<Z;kz++ ) {
-	    
-	    // Find next local minimizer of residual at this (kx,ky,kz) pixel
-	    fm_min = residual(1,kx,ky,kz);
-	    next_ind_voxel = cur_ind(kx,ky,kz) + 1;
-	    found_local_min = false;
-	    while (next_ind_voxel < num_fm-1 && !found_local_min) {
-	      if( residual(next_ind_voxel,kx,ky,kz) < residual(next_ind_voxel-1,kx,ky,kz) &&  residual(next_ind_voxel,kx,ky,kz) < residual(next_ind_voxel+1,kx,ky,kz) ) {
-		found_local_min = true;
-	      } else { 
-		next_ind_voxel++;
-	      }
-	    }
-
-	    if( !found_local_min )
-	      next_ind_voxel = num_fm;
-
-	    next_ind(kx,ky,kz) = next_ind_voxel;
-	    
-	  }
-	}
+      for(int ks=0;ks<S;ks++) {
+	std::cout << "Voxel 109, 149: signal = " << data(109,149,0,0,0,ks,0) <<  std::endl;
       }
-	    
+	
+	
+      for(int kfm=0;kfm<num_fm;kfm++) {
+	std::cout << "Voxel 109, 149: fm = " << fms[kfm] << ", residual = " << residual(kfm,109,149,0) << std::endl;
+      }
+
+
+    
       // Form the graph
       uint32_t num_nodes = X*Y*Z; // One node per voxel, num_nodes excludes source and sink
       uint32_t num_edges = num_nodes*(2 + (size_clique+1)^2); // Number of edges, including data and regularization terms
 
 
-    // Add some graph stuff
+      // Add some graph stuff
      
-    using namespace boost;
+      using namespace boost;
  
-    typedef int EdgeWeightType;
+      typedef int EdgeWeightType;
  
-    typedef adjacency_list_traits < vecS, vecS, directedS > Traits;
-    typedef adjacency_list < vecS, vecS, directedS,
-			     property < vertex_name_t, std::string,
-					property < vertex_index_t, long,
-						   property < vertex_color_t, boost::default_color_type,
-							      property < vertex_distance_t, long,
-									 property < vertex_predecessor_t, Traits::edge_descriptor > > > > >,
+      typedef adjacency_list_traits < vecS, vecS, directedS > Traits;
+      typedef adjacency_list < vecS, vecS, directedS,
+			       property < vertex_name_t, std::string,
+					  property < vertex_index_t, long,
+						     property < vertex_color_t, boost::default_color_type,
+								property < vertex_distance_t, long,
+									   property < vertex_predecessor_t, Traits::edge_descriptor > > > > >,
  
-			     property < edge_capacity_t, EdgeWeightType,
-					property < edge_residual_capacity_t, EdgeWeightType,
-						   property < edge_reverse_t, Traits::edge_descriptor > > > > Graph;
+			       property < edge_capacity_t, EdgeWeightType,
+					  property < edge_residual_capacity_t, EdgeWeightType,
+						     property < edge_reverse_t, Traits::edge_descriptor > > > > Graph;
  
-    Graph g; //a graph with 0 vertices
- 
-    property_map < Graph, edge_reverse_t >::type rev = get(edge_reverse, g);
- 
-    //add a source and sink node, and store them in s and t, respectively
-    Traits::vertex_descriptor s = add_vertex(g);
-    hoNDArray<Traits::vertex_descriptor> v(X,Y,Z);
-    for(int kx=0;kx<X;kx++) {
-      for(int ky=0;ky<Y;ky++) {
-	for(int kz=0;kz<Z;kz++) {
-	  v(kx,ky,kz) = add_vertex(g);
-	}
-      }
-    }
-    Traits::vertex_descriptor t = add_vertex(g);
-
-
-    float dist;
-    float a,b,c,d;
-    float curlmap;
-    for(int kx=0;kx<X;kx++) {
-      for(int ky=0;ky<Y;ky++) {
-	for(int kz=0;kz<Z;kz++) {
-	  
-
-	  AddEdge(s, v(kx,ky,kz), rev, 0.1, g);
-	  AddEdge(v(kx,ky,kz), t, rev, 0.2, g);
-
-
-
-	  for(int dx=-size_clique;dx<=size_clique;dx++) {
-	    for(int dy=-size_clique;dy<=size_clique;dy++) {
-	      for(int dz=-size_clique;dz<=size_clique;dz++) {
-		
-		dist = pow(dx*dx+dy*dy+dz*dz,0.5);
-
-		if(kx+dx>=0 && kx+dx<X && ky+dy>=0 && ky+dy<Y && kz+dz>=0 && kz+dz<Z && dist>0) {
-
-		  curlmap = std::min(lmap(kx,ky,kz),lmap(kx+dx,ky+dy,kz+dz));
-
-		  a = curlmap/dist*pow(cur_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
-		  b = curlmap/dist*pow(cur_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
-		  c = curlmap/dist*pow(next_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
-		  d = curlmap/dist*pow(next_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
-		  
-		  //		  AddEdge(v(kx,ky,kz), v(kx+dx,ky+dy,kz+dz), rev, b+c-a-d, g);
-		  //AddEdge(s, v(kx,ky,kz), rev, std::max(float(0.0),c-a) + std::max(float(0.0),residual(next_ind(kx,ky,kz),kx,ky,kz)-residual(cur_ind(kx,ky,kz),kx,ky,kz)), g);
-		  //AddEdge(v(kx,ky,kz), t, rev, std::max(float(0.0),a-c) + std::max(float(0.0),residual(cur_ind(kx,ky,kz),kx,ky,kz)-residual(next_ind(kx,ky,kz),kx,ky,kz)), g);
-		  //AddEdge(s, v(kx+dx,ky+dy,kz+dz), rev, std::max(float(0.0),d-c), g);
-		  //AddEdge(v(kx+dx,ky+dy,kz+dz), t, rev, std::max(float(0.0),c-d), g);
-
-
-
-
-
-
-		  if( kx==100 && ky==100) {
-		    std::cout << " One voxel, a = " << a << ", b = " << b << ", c = " << c << ", d = " << d << ", res1 = " << residual(cur_ind(kx,ky,kz),kx,ky,kz) << ", res2 = " << residual(next_ind(kx,ky,kz),kx,ky,kz) << ", ind1 = " << cur_ind(kx,ky,kz) <<  ", ind2 = " << next_ind(kx,ky,kz) << std::endl;
+      int num_big_jumps = 5;
+      for(int kiter=0;kiter<num_iterations;kiter++) {
+	
+	
+	// Graphcut: big jumps
+	
+	// Find the next candidate index at each voxel (ie: next local minimum)
+	hoNDArray< uint16_t > next_ind(X,Y,Z); // field map index
+	float cur_sign = pow(-1,kiter);
+	uint16_t next_ind_voxel;
+	bool found_local_min;
+	for( int kx=0;kx<X;kx++ ) {
+	  for( int ky=0;ky<Y;ky++ ) {
+	    for( int kz=0;kz<Z;kz++ ) {
+	      
+	      if(kiter<num_big_jumps) {
+		// Find next local minimizer of residual at this (kx,ky,kz) pixel
+		fm_min = residual(1,kx,ky,kz);
+		next_ind_voxel = cur_ind(kx,ky,kz) + (int)cur_sign;
+		found_local_min = false;
+		while (next_ind_voxel < num_fm-1 && next_ind_voxel > 0 && !found_local_min) {
+		  if( residual(next_ind_voxel,kx,ky,kz) < residual(next_ind_voxel-1,kx,ky,kz) &&  residual(next_ind_voxel,kx,ky,kz) < residual(next_ind_voxel+1,kx,ky,kz) ) {
+		    found_local_min = true;
+		  } else { 
+		    next_ind_voxel = next_ind_voxel + (int)cur_sign;
 		  }
-
 		}
+		
+		if( !found_local_min ) {
+		  if(cur_sign>0) {
+		    next_ind_voxel = num_fm-1;
+		  } else {
+		    next_ind_voxel = 0;
+		  }
+		}	
+		
+		
+	      } else {
+		
+		next_ind_voxel = cur_ind(kx,ky,kz) + (int)(cur_sign); // DH* Need to add bigger jumps here
+
+		if(next_ind_voxel>=num_fm) 
+		  next_ind_voxel=num_fm-1;
+
+		if(next_ind_voxel<=0) 
+		  next_ind_voxel=0;
 
 	      }
+	      next_ind(kx,ky,kz) = next_ind_voxel;
+
 	    }
 	  }
-
 	}
+      
+	std::cout << "Voxel 109, 149: _____ cur ind = " << cur_ind(109,149,0) << ", fm = " << fms[cur_ind(109,149,0)] << ", next ind = " << next_ind(109,149,0)  << ", fm = " << fms[next_ind(109,149,0)] << std::endl;
+	
+	
+	Graph g; //a graph with 0 vertices
+	
+	property_map < Graph, edge_reverse_t >::type rev = get(edge_reverse, g);
+	
+	//add a source and sink node, and store them in s and t, respectively
+	Traits::vertex_descriptor s = add_vertex(g);
+	hoNDArray<Traits::vertex_descriptor> v(X,Y,Z);
+	for(int kx=0;kx<X;kx++) {
+	  for(int ky=0;ky<Y;ky++) {
+	    for(int kz=0;kz<Z;kz++) {
+	      v(kx,ky,kz) = add_vertex(g);
+	    }
+	  }
+	}
+	Traits::vertex_descriptor t = add_vertex(g);
+	
+	
+	float dist;
+	float a,b,c,d;
+	float curlmap;
+	for(int kx=0;kx<X;kx++) {
+	  for(int ky=0;ky<Y;ky++) {
+	    for(int kz=0;kz<Z;kz++) {
+
+
+	      float val_sv = std::max(float(0.0),residual(next_ind(kx,ky,kz),kx,ky,kz)-residual(cur_ind(kx,ky,kz),kx,ky,kz));
+	      float val_vt = std::max(float(0.0),residual(cur_ind(kx,ky,kz),kx,ky,kz)-residual(next_ind(kx,ky,kz),kx,ky,kz));
+	      AddEdge(s, v(kx,ky,kz), rev, (int)val_sv, g);
+	      AddEdge(v(kx,ky,kz), t, rev, (int)val_vt, g);
+	      
+	      if(kx==109 && ky==149)
+		std::cout << " Val_sv = " << val_sv << ", val_vt = " << val_vt << std::endl;
+
+	      
+	      for(int dx=-size_clique;dx<=size_clique;dx++) {
+		for(int dy=-size_clique;dy<=size_clique;dy++) {
+		  for(int dz=-size_clique;dz<=size_clique;dz++) {
+		    
+		    dist = pow(dx*dx+dy*dy+dz*dz,0.5);
+		    
+		    if(kx+dx>=0 && kx+dx<X && ky+dy>=0 && ky+dy<Y && kz+dz>=0 && kz+dz<Z && dist>0) {
+		      
+		      curlmap = std::min(lmap(kx,ky,kz),lmap(kx+dx,ky+dy,kz+dz));
+		      
+		      a = curlmap/dist*pow(cur_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
+		      b = curlmap/dist*pow(cur_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
+		      c = curlmap/dist*pow(next_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
+		      d = curlmap/dist*pow(next_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
+		      
+		      // if(kx==109 && ky==149)
+		      //   std::cout << " Val_bcad = " << (b+c-a-d) << ", a = " << a << ", b = " << b << ", c = " << c << ", d = " << d << std::endl;
+
+		      AddEdge(v(kx,ky,kz), v(kx+dx,ky+dy,kz+dz), rev, (int)(b+c-a-d), g);
+		      AddEdge(s, v(kx,ky,kz), rev, (int)(std::max(float(0.0),c-a)), g);
+		      AddEdge(v(kx,ky,kz), t, rev, (int)(std::max(float(0.0),a-c)), g);
+		      AddEdge(s, v(kx+dx,ky+dy,kz+dz), rev, (int)(std::max(float(0.0),d-c)), g);
+		      AddEdge(v(kx+dx,ky+dy,kz+dz), t, rev, (int)(std::max(float(0.0),c-d)), g);
+		      
+		    }
+		    
+		  }
+		}
+	      }
+
+	    }
+	  }
+	}
+
+
+    
+	//EdgeWeightType flow = edmonds_karp_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+	//EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+	EdgeWeightType flow = boykov_kolmogorov_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+
+	std::cout << "Max flow is: " << flow << std::endl;
+
+	property_map<Graph, edge_capacity_t>::type
+	  capacity = get(edge_capacity, g);
+
+	property_map<Graph, edge_residual_capacity_t>::type
+	  residual_capacity = get(edge_residual_capacity, g);
+	property_map<Graph, vertex_color_t>::type
+	  colormap = get(vertex_color, g);
+
+
+
+	for( int kx=0;kx<X;kx++) {
+	  for( int ky=0;ky<Y;ky++) {
+	    for( int kz=0;kz<Z;kz++) {
+
+	      if(kx==109 && ky==149)
+		std::cout << " ColorMap = " << colormap[1 + kx + ky*X + kz*X*Y] << ", Colormap0 = " << colormap[0] << ", ColormapEnd = " << colormap[X*Y*Z+1] << std::endl;
+
+	      if(colormap[1 + kx + ky*X + kz*X*Y]==0)
+		cur_ind(kx,ky,kz) = next_ind(kx,ky,kz);
+	    }
+	  }
+	}
+    
+	// Graphcut: small jumps
       }
-    }
-
-
+      
+      
+    } // End else (all the graph cut iteration portion)
     
-    EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
-    //EdgeWeightType flow = boykov_kolmogorov_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
-
-    std::cout << "Max flow is: " << flow << std::endl;
-
-    property_map<Graph, edge_capacity_t>::type
-      capacity = get(edge_capacity, g);
-    property_map<Graph, edge_residual_capacity_t>::type
-      residual_capacity = get(edge_residual_capacity, g);
-    property_map<Graph, vertex_color_t>::type
-      colormap = get(vertex_color, g);
-
-    graph_traits<Graph>::vertex_iterator u_iter, u_end;
-    for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter) {
-      //      std::cout << "     Vertex: " << *u_iter << ", Color: " << colormap[*u_iter] << std::endl; 
-    }
-    
-
-
-
-    // Graphcut: small jumps
-    
-  } // End else (all the graph cut iteration portion)
-  
-
-
-
-
-
-
-
     //Do final calculations once the field map is done
     hoMatrix< std::complex<float> > curWaterFat(2,N);
     hoMatrix< std::complex<float> > AhA(2,2);
     // Do fat-water separation with current field map and R2* estimates
-    for( int k1=0;k1<X;k1++) {
-      for( int k2=0;k2<Y;k2++) {
-      
-	// Get current signal
-	for( int k4=0;k4<N;k4++) {
-	  for( int k5=0;k5<S;k5++) {
-	    tempSignal(k5,k4) = data(k1,k2,0,0,k4,k5,0);
+    for( int kx=0;kx<X;kx++) {
+      for( int ky=0;ky<Y;ky++) {
+	for( int kz=0;kz<Z;kz++) {
+	  // Get current signal
+	  for( int kn=0;kn<N;kn++) {
+	    for( int ks=0;ks<S;ks++) {
+	      tempSignal(ks,kn) = data(kx,ky,kz,0,kn,ks,0);
+	    }
 	  }
-	}
-	// Get current Psi matrix
-	fm = fms[fmIndex(k1,k2)];
-	r2star = r2stars[r2starIndex(k1,k2,fmIndex(k1,k2))];
-	for( int k3=0;k3<nte;k3++) {
-	  curModulation = exp(-r2star*echoTimes[k3])*std::complex<float>(cos(2*PI*echoTimes[k3]*fm),sin(2*PI*echoTimes[k3]*fm));
-	  for( int k4=0;k4<nspecies;k4++) {
-	    psiMatrix(k3,k4) = phiMatrix(k3,k4)*curModulation;
+	  // Get current Psi matrix
+	  fm = fms[cur_ind(kx,ky,kz)];
+	  r2star = r2stars[r2starIndex(cur_ind(kx,ky,kz),kx,ky,kz)];
+	  for( int kt=0;kt<nte;kt++) {
+	    curModulation = exp(-r2star*echoTimes[kt])*std::complex<float>(cos(2*PI*echoTimes[kt]*fm),sin(2*PI*echoTimes[kt]*fm));
+	    for( int ksp=0;ksp<nspecies;ksp++) {
+	      psiMatrix(kt,ksp) = phiMatrix(kt,ksp)*curModulation;
+	    }
 	  }
-	}
-      
-	// Solve for water and fat
-	gemm( curWaterFat, psiMatrix, true, tempSignal, false );
-	herk( AhA, psiMatrix, 'L', true );
-	//	    AhA.copyLowerTriToUpper();
-	for (int ka=0;ka<AhA.get_size(0);ka++ ) {
-	  for (int kb=ka+1;kb<AhA.get_size(1);kb++ ) {
-	    AhA(ka,kb) = conj(AhA(kb,ka));
+	  
+	  // Solve for water and fat
+	  gemm( curWaterFat, psiMatrix, true, tempSignal, false );
+	  herk( AhA, psiMatrix, 'L', true );
+	  //	    AhA.copyLowerTriToUpper();
+	  for (int ka=0;ka<AhA.get_size(0);ka++ ) {
+	    for (int kb=ka+1;kb<AhA.get_size(1);kb++ ) {
+	      AhA(ka,kb) = conj(AhA(kb,ka));
+	    }
 	  }
-	}
-      
-	hesv(AhA,curWaterFat);
-	for ( int k4=0;k4<N;k4++ ) {
-	  for ( int k5=0;k5<2;k5++ ) { // 2 elements for water and fat currently
-	    out(k1,k2,0,0,k4,k5,0) = curWaterFat(k5,k4);
+	  
+	  hesv(AhA,curWaterFat);
+	  for ( int kn=0;kn<N;kn++ ) {
+	    for ( int ks=0;ks<nspecies;ks++ ) { // 2 elements for water and fat currently
+	      out(kx,ky,kz,0,kn,ks,0) = curWaterFat(ks,kn);
+	    }
 	  }
+	  
+
+	  //	  out(kx,ky,kz,0,0,0,0) = fm;
+	  //	  out(kx,ky,kz,0,0,1,0) = r2star;
+
+
 	}
-      
       }
-    }
-  
+    }    
     std::cout << mytimer.format() << '\n';  
-  
+    
     //Clean up as needed
-  
-  
+    
+    
     return out;
   }
 }
