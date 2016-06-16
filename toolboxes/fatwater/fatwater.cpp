@@ -47,8 +47,8 @@ Traits::edge_descriptor AddEdge(Traits::vertex_descriptor &v1, Traits::vertex_de
   Traits::edge_descriptor e1 = add_edge(v1, v2, g).first;
   Traits::edge_descriptor e2 = add_edge(v2, v1, g).first;
   put(edge_capacity, g, e1, capacity);
-  put(edge_capacity, g, e2, capacity);
- 
+  put(edge_capacity, g, e2, 0*capacity);
+  
   rev[e1] = e2;
   rev[e2] = e1;
 }
@@ -93,16 +93,16 @@ namespace Gadgetron {
     
     // Set some initial parameters so we can get going
     // These will have to be specified in the XML file eventually
-    std::pair<float,float> range_r2star = std::make_pair(0.0,0.0);
-    uint16_t num_r2star = 1;
-    std::pair<float,float> range_fm = std::make_pair(-150.0,150.0);
+    std::pair<float,float> range_r2star = std::make_pair(0.0,100.0);
+    uint16_t num_r2star = 11;
+    std::pair<float,float> range_fm = std::make_pair(-200.0,200.0);
     uint16_t num_fm = 201;
     uint16_t size_clique = 1;
-    uint16_t num_iterations = 60;
+    uint16_t num_iterations = 20;
     uint16_t subsample = 1;
     float lmap_power = 2.0;
-    float lambda = 0.001;
-    float lambda_extra = 0.001;
+    float lambda = 0.02;
+    float lambda_extra = 0.01;
     
     //Check that we have reasonable data for fat-water separation
     
@@ -267,7 +267,7 @@ namespace Gadgetron {
 
     
     float residual_max = Gadgetron::max(&residual);
-    float BIG_NUMBER = 10000;
+    float BIG_NUMBER = 100000;
     for(int kfm=0;kfm<num_fm;kfm++) {
       for( int kx=0;kx<X;kx++ ) {
 	for( int ky=0;ky<Y;ky++ ) {
@@ -328,12 +328,12 @@ namespace Gadgetron {
 
 
       for(int ks=0;ks<S;ks++) {
-	std::cout << "Voxel 109, 149: signal = " << data(109,149,0,0,0,ks,0) <<  std::endl;
+	std::cout << "Voxel 90, 100: signal = " << data(90,100,0,0,0,ks,0) <<  std::endl;
       }
 	
 	
       for(int kfm=0;kfm<num_fm;kfm++) {
-	std::cout << "Voxel 109, 149: fm = " << fms[kfm] << ", residual = " << residual(kfm,109,149,0) << std::endl;
+	std::cout << "Voxel 90, 100: fm = " << fms[kfm] << ", residual = " << residual(kfm,90,100,0) << std::endl;
       }
 
 
@@ -415,7 +415,7 @@ namespace Gadgetron {
 	  }
 	}
       
-	std::cout << "Voxel 109, 149: _____ cur ind = " << cur_ind(109,149,0) << ", fm = " << fms[cur_ind(109,149,0)] << ", next ind = " << next_ind(109,149,0)  << ", fm = " << fms[next_ind(109,149,0)] << std::endl;
+	std::cout << "Voxel 90, 100: _____ cur ind = " << cur_ind(90,100,0) << ", fm = " << fms[cur_ind(90,100,0)] << ", next ind = " << next_ind(90,100,0)  << ", fm = " << fms[next_ind(90,100,0)] << std::endl;
 	
 	
 	Graph g; //a graph with 0 vertices
@@ -434,7 +434,11 @@ namespace Gadgetron {
 	}
 	Traits::vertex_descriptor t = add_vertex(g);
 	
-	
+
+
+	int min_edge = 10000;
+	int max_edge = -10000;
+
 	float dist;
 	float a,b,c,d;
 	float curlmap;
@@ -443,13 +447,39 @@ namespace Gadgetron {
 	    for(int kz=0;kz<Z;kz++) {
 
 
-	      float val_sv = std::max(float(0.0),residual(next_ind(kx,ky,kz),kx,ky,kz)-residual(cur_ind(kx,ky,kz),kx,ky,kz));
-	      float val_vt = std::max(float(0.0),residual(cur_ind(kx,ky,kz),kx,ky,kz)-residual(next_ind(kx,ky,kz),kx,ky,kz));
-	      AddEdge(s, v(kx,ky,kz), rev, (int)val_sv, g);
-	      AddEdge(v(kx,ky,kz), t, rev, (int)val_vt, g);
+	      //float val_sv = std::max(float(0.0),residual(next_ind(kx,ky,kz),kx,ky,kz)-residual(cur_ind(kx,ky,kz),kx,ky,kz));
+	      //float val_vt = std::max(float(0.0),residual(cur_ind(kx,ky,kz),kx,ky,kz)-residual(next_ind(kx,ky,kz),kx,ky,kz));
+	      //AddEdge(s, v(kx,ky,kz), rev, (int)round(val_sv), g);
+	      //AddEdge(v(kx,ky,kz), t, rev, (int)round(val_vt), g);
+
+
+	      float resNext = residual(next_ind(kx,ky,kz),kx,ky,kz);
+	      float resCur = residual(cur_ind(kx,ky,kz),kx,ky,kz);
+
+	      double val_sv = (double)(std::max(float(0.0),resNext-resCur));
+	      double val_vt = (double)(std::max(float(0.0),resCur-resNext));
+
+	      AddEdge(s, v(kx,ky,kz), rev, val_sv, g);
+	      AddEdge(v(kx,ky,kz), t, rev, val_vt, g);
 	      
-	      if(kx==109 && ky==149)
+	      if(kx==90 && ky==100)
 		std::cout << " Val_sv = " << val_sv << ", val_vt = " << val_vt << std::endl;
+
+	      if (val_sv > max_edge)
+		max_edge = val_sv;
+	      if (val_vt > max_edge)
+		max_edge = val_vt;
+
+	      if (val_sv < min_edge)
+		min_edge = val_sv;
+	      if (val_vt < min_edge)
+		min_edge = val_vt;
+	      
+
+
+
+	      //	      if(kx==90 && ky==100)
+	      //		std::cout << " Wanted.... Val_sv = " << (int)round(val_sv) << ", val_vt = " << (int)round(val_vt) << std::endl;
 
 	      
 	      for(int dx=-size_clique;dx<=size_clique;dx++) {
@@ -487,10 +517,14 @@ namespace Gadgetron {
 	}
 
 
-    
+	std::cout << " MIN EDGE = " << min_edge << ", MAX_EDGE = " << max_edge << std::endl;
+		
+		
 	//EdgeWeightType flow = edmonds_karp_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
 	//EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
-	EdgeWeightType flow = boykov_kolmogorov_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+	EdgeWeightType flow = boykov_kolmogorov_max_flow(g, s,t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+
+
 
 	std::cout << "Max flow is: " << flow << std::endl;
 
@@ -499,19 +533,35 @@ namespace Gadgetron {
 
 	property_map<Graph, edge_residual_capacity_t>::type
 	  residual_capacity = get(edge_residual_capacity, g);
+
 	property_map<Graph, vertex_color_t>::type
 	  colormap = get(vertex_color, g);
 
+
+	//	std::cout << "c flow values:" << std::endl;
+	//	graph_traits<Graph>::vertex_iterator u_iter, u_end;
+	//	graph_traits<Graph>::out_edge_iterator ei, e_end;
+	//	for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter)
+	//	  for (tie(ei, e_end) = out_edges(*u_iter, g); ei != e_end; ++ei)
+	//	    if (capacity[*ei] > 0)
+	//	      std::cout << "f " << *u_iter << " " << target(*ei, g) << " " << (capacity[*ei]) << " " << (residual_capacity[*ei]) << " " << (capacity[*ei] - residual_capacity[*ei]) << std::endl;
+				
 
 
 	for( int kx=0;kx<X;kx++) {
 	  for( int ky=0;ky<Y;ky++) {
 	    for( int kz=0;kz<Z;kz++) {
 
-	      if(kx==109 && ky==149)
-		std::cout << " ColorMap = " << colormap[1 + kx + ky*X + kz*X*Y] << ", Colormap0 = " << colormap[0] << ", ColormapEnd = " << colormap[X*Y*Z+1] << std::endl;
+	      //	      if(colormap[1 + kx + ky*X + kz*X*Y] > 0)
+	      //		std::cout << " ColorMap = " << colormap[1 + kx + ky*X + kz*X*Y] << ", x = " << kx << ", y = " << ky << std::endl;
 
-	      if(colormap[1 + kx + ky*X + kz*X*Y]==0)
+	      if(kx==90 && ky==100) {
+		std::cout << " ColorMap = " << colormap[1 + ky + kx*Y + kz*X*Y] << ", Colormap0 = " << colormap[0] << ", ColormapEnd = " << colormap[X*Y*Z+1] << std::endl;
+		std::cout << " posVoxel = " << 1 + ky + kx*Y + kz*X*Y  << ", posEnd = " << X*Y*Z+1 << std::endl;
+	      }
+
+
+	      if(colormap[1 + ky + kx*Y + kz*X*Y]!=colormap[0])
 		cur_ind(kx,ky,kz) = next_ind(kx,ky,kz);
 	    }
 	  }
@@ -522,6 +572,9 @@ namespace Gadgetron {
       
       
     } // End else (all the graph cut iteration portion)
+
+
+    std::cout << " Final estimate at voxel [90,100]... fm = " << fms[cur_ind(90,100,0)] << std::endl; 
     
     //Do final calculations once the field map is done
     hoMatrix< std::complex<float> > curWaterFat(2,N);
@@ -538,7 +591,7 @@ namespace Gadgetron {
 	  }
 	  // Get current Psi matrix
 	  fm = fms[cur_ind(kx,ky,kz)];
-	  r2star = r2stars[r2starIndex(cur_ind(kx,ky,kz),kx,ky,kz)];
+	  r2star =r2stars[r2starIndex(cur_ind(kx,ky,kz),kx,ky,kz)];
 	  for( int kt=0;kt<nte;kt++) {
 	    curModulation = exp(-r2star*echoTimes[kt])*std::complex<float>(cos(2*PI*echoTimes[kt]*fm),sin(2*PI*echoTimes[kt]*fm));
 	    for( int ksp=0;ksp<nspecies;ksp++) {
