@@ -26,8 +26,6 @@
 #include <gtest/gtest.h>
 #include <boost/random.hpp>
 
-
-
 #define GAMMABAR 42.576 // MHz/T
 #define PI 3.141592
 
