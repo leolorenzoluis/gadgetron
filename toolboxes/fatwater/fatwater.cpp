@@ -16,6 +16,18 @@
 #include <boost/graph/edmonds_karp_max_flow.hpp>
 #include <boost/timer/timer.hpp>
 
+// Curve fitting includes (from Hui's example)
+//#include "hoNDHarrWavelet.h"
+//#include "hoNDRedundantWavelet.h"
+#include "hoNDArray_math.h"
+#include "simplexLagariaSolver.h"
+#include "twoParaExpDecayOperator.h"
+#include "curveFittingCostFunction.h"
+#include <gtest/gtest.h>
+#include <boost/random.hpp>
+
+
+
 #define GAMMABAR 42.576 // MHz/T
 #define PI 3.141592
 
