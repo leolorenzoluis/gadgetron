@@ -16,7 +16,7 @@ add_library(gadgetron_bart SHARED
   bartgadget.h
   bartgadget.cpp
   BART_Recon.xml 
-  BART_Recon_Cloud.xml
+  BART_Recon_cloud.xml
 )
 
 set_target_properties(gadgetron_bart PROPERTIES VERSION ${GADGETRON_VERSION_STRING} SOVERSION ${GADGETRON_SOVERSION})
